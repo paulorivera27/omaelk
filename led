@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Run the LED CLI through the project's virtualenv, creating it on first use.
+# Works from any cwd and through a symlink (e.g. ln -s .../led ~/.local/bin/led).
+DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+
+# The virtualenv lives outside the plugin folder: omarchy rejects plugins that
+# contain symlinks, and a venv has some.
+VENV="${LEDBLE_VENV:-${XDG_DATA_HOME:-$HOME/.local/share}/ledble/venv}"
+PY="$VENV/bin/python"
+READY="$VENV/.ready"
+
+# `python -m venv` creates bin/python at once but `pip install` takes a while,
+# so "bin/python exists" does not mean "ready". Only $READY (written after pip
+# succeeds) does, and a lock makes concurrent first runs (two clicks in the bar
+# widget) wait for one bootstrap instead of racing or installing twice.
+if [ ! -e "$READY" ]; then
+    mkdir -p "$(dirname "$VENV")"
+    exec 9>"$VENV.lock"
+    flock 9
+    if [ ! -e "$READY" ]; then
+        echo "ledble: first run, creating virtualenv in $VENV (bleak, numpy)..." >&2
+        rm -rf "$VENV"
+        if python3 -m venv "$VENV" \
+            && "$VENV/bin/pip" install -q --disable-pip-version-check -r "$DIR/requirements.txt"; then
+            touch "$READY"
+        else
+            echo "ledble: setup failed (need python3 with venv and network)" >&2
+            rm -rf "$VENV"
+            exit 1
+        fi
+    fi
+    exec 9>&-       # release the lock before running (children must not inherit it)
+fi
+
+exec "$PY" "$DIR/backend/led.py" "$@"
