@@ -32,4 +32,8 @@ if [ ! -e "$READY" ]; then
     exec 9>&-       # release the lock before running (children must not inherit it)
 fi
 
+# Keep bytecode out of the plugin folder: omarchy watches it and hot-reloads on
+# changes, and a clean folder keeps `omarchy plugin update` simple.
+export PYTHONPYCACHEPREFIX="${XDG_CACHE_HOME:-$HOME/.cache}/omaelk/pycache"
+
 exec "$PY" "$DIR/backend/cli.py" "$@"

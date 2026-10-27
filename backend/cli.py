@@ -35,12 +35,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 def music_pid():
     """PID of a running `omaelk music`, or None. The cmdline check guards against
-    a recycled PID."""
+    a recycled PID. It matches on `.../backend/cli.py music` rather than this
+    file's own path, so a checkout and an installed copy of the plugin see each
+    other's music process (cmdline arguments are NUL-separated)."""
     try:
         with open(elk.MUSIC_PID) as f:
             pid = int(f.read())
         with open(f"/proc/{pid}/cmdline", "rb") as f:
-            if os.path.realpath(__file__).encode() in f.read():
+            if b"/backend/cli.py\x00music" in f.read():
                 return pid
     except (OSError, ValueError):
         pass
