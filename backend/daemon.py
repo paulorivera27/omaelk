@@ -9,7 +9,7 @@ by an exclusive lock: a second instance exits immediately, so two clients that
 start at the same moment can never leave an orphaned daemon holding the BLE
 connection.
 
-Socket: $XDG_RUNTIME_DIR/ledble.sock (newline-delimited text, one reply line
+Socket: $XDG_RUNTIME_DIR/omaelk.sock (newline-delimited text, one reply line
 per command: "ok", "ok <detail>" or "err <reason>").
 Commands: ping | status | on | off | color RRGGBB | bright N |
           mode ID [SPEED] | speed N | quit

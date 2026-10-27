@@ -3,8 +3,8 @@
 #
 # Run it by hand, from the menu ("Match current theme"), or install it as a
 # theme-set hook so it runs on every theme change:
-#   omarchy hook install theme-set /path/to/ledble/scripts/theme-sync.sh
-LED="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)/led"
+#   omarchy hook install theme-set /path/to/omaelk/scripts/theme-sync.sh
+LED="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)/omaelk"
 COLORS="$HOME/.local/state/omarchy/current/theme/colors.toml"
 
 [ -r "$COLORS" ] || exit 0

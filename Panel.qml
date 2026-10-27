@@ -5,15 +5,15 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 
-// The LED Lights popup: colour swatches and pickers, built-in effects,
+// The OmaElk popup: colour swatches and pickers, built-in effects,
 // brightness and speed, and the music-reactive toggle.
 //
-// Everything here shells out to the plugin's own `led` CLI. BarWidget.qml owns
+// Everything here shells out to the plugin's own `omaelk` CLI. BarWidget.qml owns
 // the bar icon and hands this panel the button to anchor against.
 Panel {
   id: root
-  moduleName: "paulorivera27.ledble"
-  ipcTarget: "paulorivera27.ledble"
+  moduleName: "paulorivera27.omaelk"
+  ipcTarget: "paulorivera27.omaelk"
   manageIpc: false
 
   property var anchorItem: null
@@ -24,7 +24,7 @@ Panel {
   // installed.
   readonly property string pluginDir: decodeURIComponent(
     String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "")).replace(/\/$/, "")
-  readonly property string led: pluginDir + "/led"
+  readonly property string led: pluginDir + "/omaelk"
   readonly property string scripts: pluginDir + "/scripts"
 
   property bool lit: hostWidget ? hostWidget.lit : true
@@ -83,7 +83,7 @@ Panel {
 
   function toggleMusic() {
     musicOn = !musicOn
-    Quickshell.execDetached([root.scripts + "/led-music-toggle.sh"])
+    Quickshell.execDetached([root.scripts + "/music-toggle.sh"])
     recheck.restart()
   }
 
@@ -95,7 +95,7 @@ Panel {
   Process {
     id: statusProc
     command: ["sh", "-c",
-      "kill -0 \"$(cat \"${XDG_RUNTIME_DIR:-/tmp}/ledble-music.pid\" 2>/dev/null)\" 2>/dev/null"]
+      "kill -0 \"$(cat \"${XDG_RUNTIME_DIR:-/tmp}/omaelk-music.pid\" 2>/dev/null)\" 2>/dev/null"]
     onExited: function(exitCode) { root.musicOn = exitCode === 0 }
   }
 
@@ -156,7 +156,7 @@ Panel {
             Text {
               anchors.left: parent.left
               anchors.verticalCenter: parent.verticalCenter
-              text: "LED LIGHTS"
+              text: "OMAELK"
               textFormat: Text.PlainText
               color: Commons.Color.accent
               font.family: Style.font.family
@@ -211,11 +211,11 @@ Panel {
 
             PixelButton {
               text: "Pick…"
-              onClicked: Quickshell.execDetached([root.scripts + "/led-pick.sh"])
+              onClicked: Quickshell.execDetached([root.scripts + "/pick-color.sh"])
             }
             PixelButton {
               text: "From screen"
-              onClicked: Quickshell.execDetached([root.scripts + "/led-eyedropper.sh"])
+              onClicked: Quickshell.execDetached([root.scripts + "/eyedropper.sh"])
             }
             PixelButton {
               text: "Match theme"

@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """
-CLI for ELK-BLE* LED controllers (run it through the `led` wrapper).
+CLI for ELK-BLE* LED controllers (run it through the `omaelk` wrapper).
 
 All commands go through a small persistent daemon (started on demand) that
 holds one BLE connection, so changes are instant and never collide.
 
-  led setup                    find the controller and remember its address
-  led on | off
-  led color RRGGBB             e.g. led color ff8800
-  led bright 0-100
-  led mode <name|id> [--speed 0-100]
-  led speed 0-100
-  led music [--source NAME] [-v]     audio-reactive (Ctrl-C or music-stop)
-  led music-stop | music-status
-  led status                   daemon / controller state
-  led scan-modes               step through the effect ids
-  led menu-snippet             print the omarchy menu entries (JSONC)
-  led daemon | stop-daemon
+  omaelk setup                    find the controller and remember its address
+  omaelk on | off
+  omaelk color RRGGBB             e.g. omaelk color ff8800
+  omaelk bright 0-100
+  omaelk mode <name|id> [--speed 0-100]
+  omaelk speed 0-100
+  omaelk music [--source NAME] [-v]     audio-reactive (Ctrl-C or music-stop)
+  omaelk music-stop | music-status
+  omaelk status                   daemon / controller state
+  omaelk scan-modes               step through the effect ids
+  omaelk menu-snippet             print the omarchy menu entries (JSONC)
+  omaelk daemon | stop-daemon
 """
 
 import argparse
@@ -26,7 +26,7 @@ import signal
 import sys
 
 import elk
-import ledclient
+import client
 
 ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
@@ -34,13 +34,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 # ---- music process bookkeeping -------------------------------------------
 
 def music_pid():
-    """PID of a running `led music`, or None. The cmdline check guards against
+    """PID of a running `omaelk music`, or None. The cmdline check guards against
     a recycled PID."""
     try:
         with open(elk.MUSIC_PID) as f:
             pid = int(f.read())
         with open(f"/proc/{pid}/cmdline", "rb") as f:
-            if b"led.py" in f.read():
+            if os.path.realpath(__file__).encode() in f.read():
                 return pid
     except (OSError, ValueError):
         pass
@@ -83,7 +83,7 @@ def menu_snippet():
     """JSONC entries for ~/.config/omarchy/extensions/omarchy-menu.jsonc,
     with this checkout's real paths."""
     import json
-    led = os.path.join(ROOT, "led")
+    led = os.path.join(ROOT, "omaelk")
     sc = os.path.join(ROOT, "scripts")
     rows = {}
 
@@ -100,13 +100,13 @@ def menu_snippet():
         "dot": "\U000f03e0", "bright": "\U000f00e0", "speed": "\U000f04c5",
         "fx": "\U000f140b",
     }
-    add("led", "LED Lights", G["bulb"])
+    add("led", "OmaElk · LED Lights", G["bulb"])
     add("led.on", "On", G["on"], f"{led} on")
     add("led.off", "Off", G["off"], f"{led} off")
     add("led.music", "Music reactive (toggle)", G["music"],
-        f"{sc}/led-music-toggle.sh", checked=f"{led} music-status")
-    add("led.pick", "Pick a colour…", G["palette"], f"{sc}/led-pick.sh")
-    add("led.eyedropper", "Pick from screen…", G["pick"], f"{sc}/led-eyedropper.sh")
+        f"{sc}/music-toggle.sh", checked=f"{led} music-status")
+    add("led.pick", "Pick a colour…", G["palette"], f"{sc}/pick-color.sh")
+    add("led.eyedropper", "Pick from screen…", G["pick"], f"{sc}/eyedropper.sh")
     add("led.theme", "Match current theme", G["palette"], f"{sc}/theme-sync.sh")
 
     add("led.c", "Colours", G["palette"])
@@ -137,6 +137,7 @@ def menu_snippet():
     for v in (10, 25, 50, 75, 100):
         add(f"led.brightness.{v}", f"{v}%", G["dot"], f"{led} bright {v}")
 
+    rows = {"omaelk" + k[3:]: v for k, v in rows.items()}      # led.* -> omaelk.*
     lines = [f"  {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}" for k, v in rows.items()]
     return ",\n".join(lines) + ","
 
@@ -151,12 +152,12 @@ async def run_music(addr, source, verbose):
     with open(elk.MUSIC_PID, "w") as f:
         f.write(str(os.getpid()))
     try:
-        check(await ledclient.send("on", addr))
+        check(await client.send("on", addr))
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for s in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(s, stop.set)
-        async with ledclient.Stream(addr) as st:
+        async with client.Stream(addr) as st:
             task = asyncio.create_task(music.run(st, source=source, verbose=verbose))
             task.add_done_callback(lambda _: stop.set())   # capture died: exit too
             await stop.wait()
@@ -180,10 +181,10 @@ def check(reply):
 
 
 async def main():
-    ap = argparse.ArgumentParser(prog="led", description=__doc__,
+    ap = argparse.ArgumentParser(prog="omaelk", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--addr", default=None,
-                    help="controller BLE address (default: saved by `led setup`)")
+                    help="controller BLE address (default: saved by `omaelk setup`)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("setup", "on", "off", "status", "daemon", "stop-daemon",
                  "music-stop", "music-status", "menu-snippet"):
@@ -216,17 +217,17 @@ async def main():
     if cmd == "music":
         return await run_music(addr, args.source, args.verbose)
     if cmd == "daemon":
-        await ledclient.ensure_daemon(addr); print("daemon running"); return 0
+        await client.ensure_daemon(addr); print("daemon running"); return 0
     if cmd == "stop-daemon":
-        if not await ledclient._ping():
+        if not await client._ping():
             print("daemon not running")
             return 0
-        print(await ledclient.send("quit", addr))
-        await ledclient.wait_stopped()      # until it has really let go
+        print(await client.send("quit", addr))
+        await client.wait_stopped()      # until it has really let go
         return 0
     if cmd == "status":
         try:
-            print((await ledclient.send("status", addr))[3:] or "ok")
+            print((await client.send("status", addr))[3:] or "ok")
         except (OSError, RuntimeError):
             print("daemon not running"); return 1
         return 0
@@ -237,35 +238,35 @@ async def main():
         stop_music()
 
     if cmd == "on":
-        check(await ledclient.send("on", addr))
+        check(await client.send("on", addr))
     elif cmd == "off":
-        check(await ledclient.send("off", addr))
+        check(await client.send("off", addr))
     elif cmd == "color":
         h = args.hex.lstrip("#")
         if len(h) != 6 or any(ch not in "0123456789abcdefABCDEF" for ch in h):
             print("colour must be RRGGBB hex, e.g. ff8800", file=sys.stderr)
             return 1
-        check(await ledclient.send(f"color {h}", addr))
+        check(await client.send(f"color {h}", addr))
     elif cmd == "bright":
-        check(await ledclient.send(f"bright {args.pct}", addr))
+        check(await client.send(f"bright {args.pct}", addr))
     elif cmd == "speed":
-        check(await ledclient.send(f"speed {args.pct}", addr))
+        check(await client.send(f"speed {args.pct}", addr))
     elif cmd == "mode":
         mid = elk.NAMED_MODES.get(args.effect)
         if mid is None:
             try:
                 mid = int(args.effect, 0)
             except ValueError:
-                print(f"unknown effect {args.effect!r}; see `led mode --help`",
+                print(f"unknown effect {args.effect!r}; see `omaelk mode --help`",
                       file=sys.stderr)
                 return 1
         line = f"mode {mid}" + (f" {args.speed}" if args.speed is not None else "")
-        check(await ledclient.send(line, addr))
+        check(await client.send(line, addr))
     elif cmd == "scan-modes":
         lo, hi = int(args.lo, 0), int(args.hi, 0)
         print(f"Stepping effect ids 0x{lo:02x}..0x{hi:02x}, {args.hold}s each. "
               "Watch the lights; Ctrl-C to stop.")
-        async with ledclient.Stream(addr) as st:
+        async with client.Stream(addr) as st:
             for mid in range(lo, hi + 1):
                 print(f"  id 0x{mid:02x} ({mid})")
                 await st.send(f"mode {mid}")

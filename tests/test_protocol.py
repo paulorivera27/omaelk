@@ -17,7 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "backend"))
 
 import elk  # noqa: E402
-import led  # noqa: E402
+import cli  # noqa: E402
 
 
 def h(s):
@@ -63,7 +63,7 @@ class Effects(unittest.TestCase):
 
 class Menu(unittest.TestCase):
     def rows(self):
-        return json.loads("{" + led.menu_snippet().rstrip(",") + "}")
+        return json.loads("{" + cli.menu_snippet().rstrip(",") + "}")
 
     def test_snippet_is_valid_json_with_every_effect(self):
         rows = self.rows()

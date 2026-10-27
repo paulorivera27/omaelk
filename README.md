@@ -2,17 +2,16 @@
   <img src="assets/icon.svg" width="128" alt="pixel-art light bulb">
 </p>
 
-<h1 align="center">ledble</h1>
+<h1 align="center">OmaElk</h1>
 
 <p align="center">
-  Control cheap <b>ELK-BLEDOB / ELK-BLE</b> Bluetooth LED lights from Linux —<br>
-  colours, effects, brightness and a <b>music-reactive mode</b> — from the shell or an<br>
-  <a href="https://omarchy.org">Omarchy</a> bar widget with a pixel-art popup.
+  An <a href="https://omarchy.org">Omarchy</a> plugin for cheap <b>ELK-BLEDOB / ELK-BLE</b> Bluetooth LED lights —<br>
+  colours, effects, brightness and a <b>music-reactive mode</b>, from a pixel-art bar widget or the shell.
 </p>
 
 These controllers (the little box on a USB-powered RGB strip, advertising as
 `ELK-BLEDOB`) are powered over USB but **controlled over Bluetooth LE**, so they
-never show up in `lsusb`. `ledble` talks to them directly; no phone app needed.
+never show up in `lsusb`. OmaElk talks to them directly; no phone app needed.
 
 ## Features
 
@@ -24,37 +23,70 @@ never show up in `lsusb`. `ledble` talks to them directly; no phone app needed.
   spectrum (bass → red, treble → violet), brightness tracks loudness, with a
   punch on the beat.
 - **Colour pickers** — a colour dialog and a screen eyedropper.
-- **Theme sync** — match the lights to your Omarchy theme's accent colour,
-  on demand or automatically on every theme change.
+- **Theme sync** — match the lights to your Omarchy theme's accent colour, on
+  demand or automatically on every theme change.
 - **Fast and light** — one background process holds the Bluetooth link; commands
   are instant. See [Performance](#performance).
-- **`led` CLI** — scriptable, with a menu generator for the Omarchy launcher.
+- **`omaelk` CLI** — scriptable, with a menu generator for the Omarchy launcher.
 
-## Install
+## Install (Omarchy plugin)
 
-### As an Omarchy plugin
+> Omarchy plugins run as ordinary, **unsandboxed** code inside your shell. Read
+> what you install; this one is small and MIT-licensed.
+
+**1. Add the plugin and enable it**
 
 ```bash
-omarchy plugin add https://github.com/paulorivera27/ledble.git --enable
+omarchy plugin add https://github.com/paulorivera27/omaelk.git --enable
 ```
 
-Then add **LED Lights** to your bar. The first time you use it, the `led`
-wrapper creates a Python virtualenv in `~/.local/share/ledble/venv` and installs
-`bleak` and `numpy` (needs `python3` with `venv`, and network access once).
-
-Find your controller and remember its address:
+`omarchy plugin add` clones the repo into
+`~/.config/omarchy/plugins/paulorivera27.omaelk/`, validates its `manifest.json`,
+and asks you to confirm (pass `--yes` to skip that). With `--enable` it also
+turns the plugin on and asks which bar section to put the widget in, suggesting
+`right`, the section this plugin's manifest asks for. Without `--enable` it
+installs disabled; enable it later, choosing the section yourself:
 
 ```bash
-~/.config/omarchy/plugins/paulorivera27.ledble/led setup
+omarchy plugin enable paulorivera27.omaelk --section right
 ```
 
-### Standalone (CLI only)
+**2. Put it where you want it in the bar** (optional)
 
 ```bash
-git clone https://github.com/paulorivera27/ledble.git
-cd ledble
-./led setup                     # finds the controller, saves its address
-ln -s "$PWD/led" ~/.local/bin/led   # optional: use it as `led` anywhere
+omarchy bar put  paulorivera27.omaelk --section right          # add it
+omarchy bar move paulorivera27.omaelk --section left --index 0 # reposition
+omarchy bar put  paulorivera27.omaelk --after omarchy.clock    # next to the clock
+```
+
+**3. Find your controller (once)**
+
+Plug the lights into USB power, close any phone app that is connected to them
+(a connected controller stops advertising), then:
+
+```bash
+~/.config/omarchy/plugins/paulorivera27.omaelk/omaelk setup
+```
+
+The first run builds a small Python virtualenv in `~/.local/share/omaelk/venv`
+(installs `bleak` and `numpy`; needs `python3` with `venv` and network access
+once). `setup` scans for the controller and remembers its address. After that the
+bar icon works.
+
+**Manage the plugin**
+
+```bash
+omarchy plugin list                          # see it and its state
+omarchy plugin update paulorivera27.omaelk   # pull the latest (shows a diff first)
+omarchy plugin disable paulorivera27.omaelk  # turn it off, keep it installed
+omarchy plugin remove paulorivera27.omaelk   # uninstall
+```
+
+Removing the plugin leaves its virtualenv and config behind. To wipe those too:
+
+```bash
+~/.config/omarchy/plugins/paulorivera27.omaelk/omaelk stop-daemon   # before removing
+rm -rf ~/.local/share/omaelk ~/.config/omaelk
 ```
 
 ### Requirements
@@ -70,21 +102,30 @@ Tested with an `ELK-BLEDOB` controller on Omarchy (Arch, Hyprland, PipeWire).
 Other `ELK-BLE*` controllers that speak the same protocol should work; see
 [Compatibility](#compatibility).
 
+### CLI only (without the plugin)
+
+```bash
+git clone https://github.com/paulorivera27/omaelk.git
+cd omaelk
+./omaelk setup
+ln -s "$PWD/omaelk" ~/.local/bin/omaelk     # optional: run `omaelk` anywhere
+```
+
 ## Usage
 
 ```bash
-led setup                       # discover the controller (once)
-led on / led off
-led color ff8800                # any RRGGBB hex
-led bright 60                   # 0-100
-led mode fade-7color            # built-in effect, see below
-led mode strobe-red --speed 80
-led speed 40                    # effect speed 0 (slow) .. 100 (fast)
-led music                       # react to what's playing; Ctrl-C to stop
-led music-stop / led music-status
-led status                      # daemon + controller state
-led scan-modes                  # step through every effect to see them
-led menu-snippet                # entries for the Omarchy launcher menu
+omaelk setup                       # discover the controller (once)
+omaelk on / omaelk off
+omaelk color ff8800                # any RRGGBB hex
+omaelk bright 60                   # 0-100
+omaelk mode fade-7color            # built-in effect, see below
+omaelk mode strobe-red --speed 80
+omaelk speed 40                    # effect speed 0 (slow) .. 100 (fast)
+omaelk music                       # react to what's playing; Ctrl-C to stop
+omaelk music-stop / omaelk music-status
+omaelk status                      # daemon + controller state
+omaelk scan-modes                  # step through every effect to see them
+omaelk menu-snippet                # entries for the Omarchy launcher menu
 ```
 
 Setting a colour or effect while music mode is running stops music mode, so the
@@ -102,17 +143,19 @@ change sticks.
 
 ### Omarchy launcher menu
 
+The bar widget is the main interface, but you can also have an **OmaElk**
+submenu in the Omarchy launcher (colours, grouped effects, speed, brightness):
+
 ```bash
-led menu-snippet
+omaelk menu-snippet
 ```
 
-prints JSONC rows (with this checkout's real paths) to paste into
-`~/.config/omarchy/extensions/omarchy-menu.jsonc`, giving you an **LED Lights**
-submenu with colours, grouped effects, speed and brightness. Bind it to a key in
-`~/.config/hypr/bindings.lua`:
+prints JSONC rows, with this install's real paths, to paste into
+`~/.config/omarchy/extensions/omarchy-menu.jsonc` (before the closing `}`). To
+open it from a key, add to `~/.config/hypr/bindings.lua`:
 
 ```lua
-o.bind("SUPER + SHIFT + L", "LED Lights", "omarchy-menu summon led")
+o.bind("SUPER + SHIFT + L", "OmaElk", "omarchy-menu summon omaelk")
 ```
 
 ### Match the theme automatically
@@ -121,7 +164,7 @@ o.bind("SUPER + SHIFT + L", "LED Lights", "omarchy-menu summon led")
 To run it on every theme change:
 
 ```bash
-omarchy hook install theme-set /path/to/ledble/scripts/theme-sync.sh
+omarchy hook install theme-set ~/.config/omarchy/plugins/paulorivera27.omaelk/scripts/theme-sync.sh
 ```
 
 ## Music mode and privacy
@@ -130,16 +173,16 @@ Music mode listens to the **monitor of your default audio output** (a copy of
 what you are already playing) using `parec`. It is not your microphone. Each
 ~43 ms frame is analysed with an FFT and then discarded: **nothing is recorded,
 saved or sent anywhere**. The only thing that ever reaches the light is three
-colour bytes. `led music --source NAME` picks a different monitor; list them
+colour bytes. `omaelk music --source NAME` picks a different monitor; list them
 with `pactl list short sources | grep monitor`.
 
 ## Configuration
 
 | | |
 |---|---|
-| `led setup` | saves the controller address to `~/.config/ledble/config.json` |
-| `LEDBLE_ADDR` | override the controller address |
-| `LEDBLE_VENV` | override the virtualenv location |
+| `omaelk setup` | saves the controller address to `~/.config/omaelk/config.json` |
+| `OMAELK_ADDR` | override the controller address |
+| `OMAELK_VENV` | override the virtualenv location |
 | `--addr AA:BB:..` | per-command address override |
 
 With no address configured, the daemon scans for the first `ELK-BLE*` device
@@ -148,9 +191,9 @@ and remembers it.
 ## How it works
 
 ```
- led CLI / bar widget / menu ──►  Unix socket  ──►  led-daemon  ══ BLE ══►  controller
-   (instant, stateless)       $XDG_RUNTIME_DIR     (one connection,
-                               /ledble.sock         single instance)
+ omaelk CLI / bar widget / menu ──►  Unix socket  ──►  daemon  ══ BLE ══►  controller
+      (instant, stateless)         $XDG_RUNTIME_DIR   (one connection,
+                                    /omaelk.sock       single instance)
 ```
 
 Scanning and connecting over BlueZ takes seconds, and a controller that is
@@ -187,10 +230,10 @@ bass-and-sweep track:
 
 | | CPU (of one core) | Memory |
 |---|---|---|
-| `led music` (capture + FFT + colour) | ~1.4 % | 37 MB |
+| `omaelk music` (capture + FFT + colour) | ~1.4 % | 37 MB |
 | daemon, streaming colour | ~0.4 % | 28 MB |
 | daemon, idle | 0.00 % | 28 MB, 1 thread |
-| a plain `led color …` call | ~67 ms wall | — |
+| a plain `omaelk color …` call | ~67 ms wall | — |
 
 That is about 0.1 % of the whole machine. Nothing polls in the background: the
 daemon idles at zero, the CLI does not import NumPy unless you start music mode,
@@ -203,7 +246,7 @@ Written against `ELK-BLEDOB`. The related `ELK-BLEDOM` family uses a slightly
 different frame layout and is **not** covered; see the projects in
 [Credits](#credits) for those. If your controller advertises as `ELK-BLE…` and
 the colour command does nothing, it is probably a variant — open an issue with
-the output of `led setup`.
+the output of `omaelk setup`.
 
 ## Troubleshooting
 
@@ -211,18 +254,21 @@ the output of `led setup`.
   nearby? Close the phone app (a connected controller stops advertising).
 - **Stuck connection** — `bluetoothctl disconnect <address>`, then retry. The
   daemon also does this on its own after a failed scan.
-- **Restart the daemon** — `led stop-daemon` (the next command starts it again).
-- **Music mode does nothing** — check `led status`, and that audio is playing on
-  the *default* output. `pactl get-default-sink` shows which.
+- **Restart the daemon** — `omaelk stop-daemon` (the next command starts it again).
+- **Music mode does nothing** — check `omaelk status`, and that audio is playing
+  on the *default* output. `pactl get-default-sink` shows which.
+- **Widget missing or blank** — `omarchy plugin list` should show
+  `paulorivera27.omaelk` as `enabled`. QML errors land in the shell log:
+  `qs log -t 80`.
 
-## Development
+## Development and publishing
 
 ```
 manifest.json  BarWidget.qml  Panel.qml  PixelButton.qml   Omarchy plugin (QML)
 assets/icon.svg                                            pixel-art icon
-led                                                        wrapper (venv bootstrap)
-backend/       elk.py  led-daemon.py  ledclient.py  led.py  music.py
-scripts/       theme-sync.sh  led-pick.sh  led-eyedropper.sh  led-music-toggle.sh
+omaelk                                                     wrapper (venv bootstrap)
+backend/       elk.py  daemon.py  client.py  cli.py  music.py
+scripts/       theme-sync.sh  pick-color.sh  eyedropper.sh  music-toggle.sh
 tests/         test_protocol.py
 ```
 
@@ -230,6 +276,27 @@ tests/         test_protocol.py
 python3 -m unittest discover -s tests -v   # protocol + packaging checks
 omarchy plugin validate .                  # Omarchy's own plugin validator
 ```
+
+**The manifest.** `manifest.json` must sit at the repo root. Required fields:
+`schemaVersion` (the number `1`), `id`, `name`, `version`, `kinds`, and
+`entryPoints`. This plugin is a `bar-widget` whose `entryPoints.barWidget` is
+`BarWidget.qml`. The `id` follows the `author.name` convention
+(`paulorivera27.omaelk`); the `omarchy.*` namespace is reserved. The installer
+rejects absolute or `..` entry paths and **any symlink inside the plugin folder**
+(which is why the virtualenv lives outside it, in `~/.local/share/omaelk`).
+
+**Publishing.** There is no central plugin registry: people install straight
+from your git URL.
+
+```bash
+omarchy plugin validate .
+gh repo create omaelk --public --source . --push     # first time
+gh repo edit --add-topic omarchy --add-topic omarchy-plugin --add-topic led
+git tag v0.2.0 && git push --tags                    # bump "version" in manifest.json first
+```
+
+Users then run `omarchy plugin add https://github.com/<you>/omaelk.git --enable`,
+and `omarchy plugin update` follows your default branch.
 
 The icon is a 16×16 bitmap drawn in `BarWidget.qml`; `assets/icon.svg` is the
 same grid. The bar draws it in your theme's accent colour.

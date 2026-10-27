@@ -40,7 +40,7 @@ async def ensure_daemon(addr=None, timeout=10.0):
     waits for the one socket."""
     if await _ping():
         return
-    cmd = [PY, os.path.join(HERE, "led-daemon.py")]
+    cmd = [PY, os.path.join(HERE, "daemon.py")]
     if addr:
         cmd.append(addr)
     loop = asyncio.get_running_loop()

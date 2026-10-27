@@ -5,13 +5,13 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 
-// LED Lights: a pixel-art bulb in the bar and the host for the control popup.
+// OmaElk: a pixel-art bulb in the bar and the host for the control popup.
 //
 // Left click opens the popup, right click toggles music-reactive mode, middle
 // click matches the lights to the current theme.
 BarWidget {
   id: root
-  moduleName: "paulorivera27.ledble"
+  moduleName: "paulorivera27.omaelk"
 
   // Whether the lights are believed to be on. The popup flips this when you
   // press ON/OFF; the icon dims when they are off.
@@ -61,7 +61,7 @@ BarWidget {
   }
 
   IpcHandler {
-    target: "paulorivera27.ledble"
+    target: "paulorivera27.omaelk"
 
     function open(): void { root.open() }
     function close(): void { root.close() }
@@ -76,7 +76,7 @@ BarWidget {
     bar: root.bar
     labelVisible: false
     hasVisualContent: true
-    tooltipText: root.musicOn ? "LED lights — music mode" : "LED lights"
+    tooltipText: root.musicOn ? "OmaElk — music mode" : "OmaElk LED lights"
     fixedWidth: root.vertical ? -1 : icon.width + Style.space(16)
     dimmed: !root.lit
 

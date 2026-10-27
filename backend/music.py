@@ -54,7 +54,7 @@ async def default_monitor():
 
 
 async def run(stream, source=None, verbose=False):
-    """Stream colour into `stream` (a connected ledclient.Stream) until
+    """Stream colour into `stream` (a connected client.Stream) until
     cancelled or the audio capture ends."""
     source = source or await default_monitor()
     proc = await asyncio.create_subprocess_exec(

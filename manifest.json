@@ -1,17 +1,18 @@
 {
   "schemaVersion": 1,
-  "id": "paulorivera27.ledble",
-  "name": "LED Lights",
-  "version": "0.1.0",
+  "id": "paulorivera27.omaelk",
+  "name": "OmaElk",
+  "version": "0.2.0",
   "author": "Paulo Rivera",
   "license": "MIT",
-  "description": "Control ELK-BLEDOB / ELK-BLE Bluetooth LED strips from the bar: colours, effects, brightness, and music-reactive mode.",
+  "description": "Control ELK-BLEDOB / ELK-BLE Bluetooth LED lights from the bar: colours, 22 effects, brightness, and music-reactive mode.",
+  "tags": ["led", "bluetooth", "rgb", "lighting", "music", "elk-bledob"],
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "LED Lights",
+    "displayName": "OmaElk",
     "description": "Pixel-art bulb with a colour, effect and music-mode popup for ELK-BLE LED controllers",
     "category": "Hardware",
     "allowMultiple": false,

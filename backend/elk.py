@@ -18,24 +18,24 @@ NAME_PREFIX = "ELK-BLE"
 
 # Everything the daemon and its clients share lives in the user's runtime dir.
 RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-SOCK = os.path.join(RUNTIME_DIR, "ledble.sock")
-LOCK = os.path.join(RUNTIME_DIR, "ledble.lock")
-MUSIC_PID = os.path.join(RUNTIME_DIR, "ledble-music.pid")
+SOCK = os.path.join(RUNTIME_DIR, "omaelk.sock")
+LOCK = os.path.join(RUNTIME_DIR, "omaelk.lock")
+MUSIC_PID = os.path.join(RUNTIME_DIR, "omaelk-music.pid")
 
 CONFIG = os.path.join(
     os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
-    "ledble", "config.json")
+    "omaelk", "config.json")
 
 # Same location the `led` wrapper creates its virtualenv in (outside the
 # plugin folder, which omarchy requires to be symlink-free).
-VENV = os.environ.get("LEDBLE_VENV") or os.path.join(
+VENV = os.environ.get("OMAELK_VENV") or os.path.join(
     os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"),
-    "ledble", "venv")
+    "omaelk", "venv")
 
 
 def load_address():
-    """Controller MAC: $LEDBLE_ADDR, else the saved config, else None."""
-    addr = os.environ.get("LEDBLE_ADDR")
+    """Controller MAC: $OMAELK_ADDR, else the saved config, else None."""
+    addr = os.environ.get("OMAELK_ADDR")
     if addr:
         return addr
     try:
