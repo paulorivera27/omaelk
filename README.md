@@ -167,6 +167,12 @@ To run it on every theme change:
 omarchy hook install theme-set ~/.config/omarchy/plugins/paulorivera27.omaelk/scripts/theme-sync.sh
 ```
 
+`omarchy hook install` *copies* the script into
+`~/.config/omarchy/hooks/theme-set.d/`; the copy finds OmaElk at its standard
+plugin location (or wherever `OMAELK_HOME` points). If you move or rename the
+plugin, or update `theme-sync.sh`, run the install command again. To remove the
+hook, delete `~/.config/omarchy/hooks/theme-set.d/theme-sync.sh`.
+
 ## Music mode and privacy
 
 Music mode listens to the **monitor of your default audio output** (a copy of
