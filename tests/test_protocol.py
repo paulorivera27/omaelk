@@ -166,6 +166,15 @@ class Packaging(unittest.TestCase):
         self.assertEqual(m["kinds"], ["bar-widget"])
         self.assertTrue(os.path.isfile(os.path.join(ROOT, m["entryPoints"]["barWidget"])))
 
+    def test_manifest_version_matches_changelog(self):
+        with open(os.path.join(ROOT, "manifest.json")) as f:
+            version = json.load(f)["version"]
+        with open(os.path.join(ROOT, "CHANGELOG.md")) as f:
+            # First versioned heading, so a leading "## Unreleased" is skipped.
+            top = re.search(r"^## \[?v?(\d+\.\d+\.\d+)", f.read(), re.M)
+        self.assertIsNotNone(top, "CHANGELOG.md has no versioned heading")
+        self.assertEqual(version, top.group(1))
+
     def test_no_machine_specific_values_in_tracked_sources(self):
         bad = re.compile(r"/home/darkxxx|BE:27:65")
         for base, dirs, files in os.walk(ROOT):
