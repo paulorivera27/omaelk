@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "paulorivera27.omaelk",
   "name": "OmaElk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Paulo Rivera",
   "license": "MIT",
   "description": "Control ELK-BLEDOB / ELK-BLE Bluetooth LED lights from the bar: colours, 22 effects, brightness, and music-reactive mode.",

@@ -13,9 +13,13 @@ BarWidget {
   id: root
   moduleName: "paulorivera27.omaelk"
 
-  // Whether the lights are believed to be on. The popup flips this when you
-  // press ON/OFF; the icon dims when they are off.
+  // Whether the lights are on. The popup sets it when you press ON/OFF and then
+  // corrects it from the daemon's last-commanded power, so changes made from the
+  // menu or CLI show up too. The icon dims when they are off.
   property bool lit: true
+  // False until a command or a probe has told us; until then "lit" is only a
+  // default, so the tooltip doesn't claim it.
+  property bool litKnown: false
   readonly property bool musicOn: panelLoader.item ? panelLoader.item.musicOn === true : false
 
   // ---- Popup shape contract for shell.summon/hide/toggle routing:
@@ -26,7 +30,7 @@ BarWidget {
   function close() { if (panelLoader.item) panelLoader.item.close() }
   function togglePanel() { if (panelLoader.item) panelLoader.item.toggle() }
 
-  readonly property real openPanelIndicatorWidth: icon.width
+  readonly property real openPanelIndicatorWidth: 16 * icon.px     // the bulb, not the note margins
   readonly property real openPanelIndicatorHeight: icon.height
   readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
 
@@ -76,7 +80,9 @@ BarWidget {
     bar: root.bar
     labelVisible: false
     hasVisualContent: true
-    tooltipText: root.musicOn ? "OmaElk — music mode" : "OmaElk LED lights"
+    tooltipText: root.musicOn ? "OmaElk — music mode"
+                 : !root.litKnown ? "OmaElk LED lights"
+                 : root.lit ? "OmaElk — lights on" : "OmaElk — lights off"
     fixedWidth: root.vertical ? -1 : icon.width + Style.space(16)
     dimmed: !root.lit
 
@@ -93,7 +99,7 @@ BarWidget {
     // ---- The bulb. 16x16 pixel art, drawn rect by rect so it stays hard-edged
     //      at any integer scale and takes its colours from the live theme.
     //   #  body (theme accent)     +  highlight      =  screw base
-    //   *  rays (accent; blink in music mode)
+    //   *  rays (accent; replaced by music notes in music mode)
     Canvas {
       id: icon
       anchors.centerIn: parent
@@ -121,9 +127,21 @@ BarWidget {
       readonly property int px: Math.max(1, Math.floor((root.barSize - Style.space(8)) / 16))
       readonly property color body: Commons.Color.accent
       readonly property color base: button.foreground
-      property bool rayPhase: true
+      // Flips every 420 ms in music mode; the notes take turns being bright.
+      property bool notePhase: true
 
-      width: 16 * px
+      // The bulb is 16 wide, centred in a canvas with `margin` empty columns
+      // each side. The margins are where the music notes go in music mode, so
+      // they are big enough to read as notes at bar size; the bulb itself
+      // doesn't change.
+      readonly property int margin: 5
+      readonly property int cols: 16 + 2 * margin
+      readonly property var noteRows: ["..##.", "..#.#", "..#..", "..#..", "###..", "###.."]
+      // Where the three notes sit, in canvas columns/rows: top left, right
+      // side, bottom left.
+      readonly property var notes: [[0, 0], [cols - 5, 4], [0, 10]]
+
+      width: cols * px
       height: 16 * px
       renderTarget: Canvas.Image
       antialiasing: false
@@ -131,7 +149,7 @@ BarWidget {
       onPxChanged: requestPaint()
       onBodyChanged: requestPaint()
       onBaseChanged: requestPaint()
-      onRayPhaseChanged: requestPaint()
+      onNotePhaseChanged: requestPaint()
       Component.onCompleted: requestPaint()
 
       onPaint: {
@@ -146,12 +164,24 @@ BarWidget {
             else if (c === "+") ctx.fillStyle = Qt.rgba(Math.min(1, body.r + 0.35), Math.min(1, body.g + 0.35), Math.min(1, body.b + 0.35), 1)
             else if (c === "=") ctx.fillStyle = Qt.rgba(base.r, base.g, base.b, 0.6)
             else if (c === "*") {
-              // Rays only while the lights are on; in music mode they blink.
-              if (!root.lit || (root.musicOn && !rayPhase)) continue
+              // Rays only while the lights are on, and not in music mode,
+              // where the notes take their place.
+              if (!root.lit || root.musicOn) continue
               ctx.fillStyle = Qt.rgba(body.r, body.g, body.b, 0.85)
             }
-            ctx.fillRect(x * px, y * px, px, px)
+            ctx.fillRect((margin + x) * px, y * px, px, px)
           }
+        }
+
+        if (!root.musicOn) return
+        for (var n = 0; n < notes.length; n++) {
+          // Neighbouring notes are opposite phases, so there is always movement.
+          var bright = (n % 2 === 0) === notePhase
+          ctx.fillStyle = Qt.rgba(body.r, body.g, body.b, bright ? 1 : 0.55)
+          for (var r = 0; r < noteRows.length; r++)
+            for (var q = 0; q < noteRows[r].length; q++)
+              if (noteRows[r].charAt(q) === "#")
+                ctx.fillRect((notes[n][0] + q) * px, (notes[n][1] + r) * px, px, px)
         }
       }
 
@@ -165,7 +195,7 @@ BarWidget {
         interval: 420
         repeat: true
         running: root.musicOn
-        onTriggered: icon.rayPhase = !icon.rayPhase
+        onTriggered: icon.notePhase = !icon.notePhase
       }
     }
   }

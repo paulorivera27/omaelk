@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      # Same Python the plugin's venv gets on Omarchy/Arch.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Lint Python (errors and undefined names only)
+        if: ${{ !cancelled() }}
+        run: |
+          pip install ruff==0.17.3
+          ruff check --select E9,F backend tests
+
+      - name: Lint shell scripts
+        if: ${{ !cancelled() }}
+        run: shellcheck --severity=warning omaelk scripts/*.sh

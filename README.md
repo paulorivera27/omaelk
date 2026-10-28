@@ -9,15 +9,24 @@
   colours, effects, brightness and a <b>music-reactive mode</b>, from a pixel-art bar widget or the shell.
 </p>
 
+<p align="center">
+  <img src="assets/screenshots/bar-widget.png" width="510" alt="The OmaElk bulb at the left of the Omarchy bar's system icons, in the theme's accent colour">
+</p>
+
 These controllers (the little box on a USB-powered RGB strip, advertising as
 `ELK-BLEDOB`) are powered over USB but **controlled over Bluetooth LE**, so they
 never show up in `lsusb`. OmaElk talks to them directly; no phone app needed.
+
+**Any standard Bluetooth LE adapter will do** — the one built into your laptop
+or a cheap USB dongle — as long as it can reach the controller. There is nothing
+adapter-specific to install or configure.
 
 ## Features
 
 - **Bar widget** — a pixel-art bulb that takes its colour from your Omarchy
   theme. Click for a popup with swatches, effects, brightness and speed.
-  Right-click toggles music mode, middle-click matches the current theme.
+  Right-click toggles music mode (three music notes come off the bulb while it
+  is on), middle-click matches the current theme.
 - **22 built-in effects** — jump, fade (single colours and cross-fades), strobe.
 - **Music-reactive mode** — follows whatever you are playing. Hue tracks the
   spectrum (bass → red, treble → violet), brightness tracks loudness, with a
@@ -25,9 +34,20 @@ never show up in `lsusb`. OmaElk talks to them directly; no phone app needed.
 - **Colour pickers** — a colour dialog and a screen eyedropper.
 - **Theme sync** — match the lights to your Omarchy theme's accent colour, on
   demand or automatically on every theme change.
-- **Fast and light** — one background process holds the Bluetooth link; commands
-  are instant. See [Performance](#performance).
+- **Fast and light** — one background process holds the Bluetooth link; once it
+  is connected, commands take ~50 ms (the first connect takes a few seconds).
+  See [Performance](#performance).
 - **`omaelk` CLI** — scriptable, with a menu generator for the Omarchy launcher.
+
+<table>
+  <tr>
+    <td align="center"><img src="assets/screenshots/popup.png" width="300" alt="The OmaElk popup: colour swatches, pickers, music button, jump/fade/strobe effects and brightness and speed sliders"><br><sub>The popup</sub></td>
+    <td align="center"><img src="assets/screenshots/popup-music.png" width="300" alt="The popup with music mode on: the music button is highlighted and reads Reacting to audio"><br><sub>Music mode on</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="assets/screenshots/bar-widget-music.png" width="510" alt="The bulb in the bar with three music notes coming off it, which pulse while music mode is on"><br><sub>In music mode three notes come off the bulb</sub></td>
+  </tr>
+</table>
 
 ## Install (Omarchy plugin)
 
@@ -93,7 +113,7 @@ rm -rf ~/.local/share/omaelk ~/.config/omaelk
 
 | | |
 |---|---|
-| Linux with BlueZ | Bluetooth LE adapter |
+| Linux with BlueZ and any Bluetooth LE adapter | one that can reach the controller |
 | `python3` + `venv` | everything else is installed for you |
 | `pipewire-pulse` / `pulseaudio-utils` | `parec`, for music mode |
 | `zenity`, `hyprpicker` | optional: colour dialog / eyedropper |
@@ -123,13 +143,14 @@ omaelk mode strobe-red --speed 80
 omaelk speed 40                    # effect speed 0 (slow) .. 100 (fast)
 omaelk music                       # react to what's playing; Ctrl-C to stop
 omaelk music-stop / omaelk music-status
-omaelk status                      # daemon + controller state
+omaelk status                      # link + last-commanded power, e.g. "connected on";
+                                   # never starts the daemon
 omaelk scan-modes                  # step through every effect to see them
 omaelk menu-snippet                # entries for the Omarchy launcher menu
 ```
 
-Setting a colour or effect while music mode is running stops music mode, so the
-change sticks.
+Setting a colour or effect, or turning the lights off, while music mode is
+running stops music mode, so the change sticks.
 
 ### Effects
 
@@ -210,7 +231,9 @@ command is a one-line write to its socket. The daemon:
 - starts on demand and is guarded by a lock, so simultaneous clients can never
   spawn two daemons that fight over the link;
 - opens its socket before connecting, so a missing controller never makes the
-  CLI hang — it fails fast with a clear error and backs off;
+  CLI hang — it reports a clear error and backs off for a few seconds;
+- remembers the last power it was told to set, since the controller can't be
+  asked (that is what `omaelk status` and the bulb's dimming read);
 - recovers a stuck BlueZ link (`bluetoothctl disconnect`, then rescan) on its own.
 
 ### Protocol
@@ -239,12 +262,32 @@ bass-and-sweep track:
 | `omaelk music` (capture + FFT + colour) | ~1.4 % | 37 MB |
 | daemon, streaming colour | ~0.4 % | 28 MB |
 | daemon, idle | 0.00 % | 28 MB, 1 thread |
-| a plain `omaelk color …` call | ~67 ms wall | — |
+| a plain `omaelk color …` call (link up) | ~50 ms wall | — |
 
-That is about 0.1 % of the whole machine. Nothing polls in the background: the
-daemon idles at zero, the CLI does not import NumPy unless you start music mode,
-NumPy's thread pool is capped to one thread, and the bar widget only checks
-whether music is running while its popup is open or music mode is on.
+That is about 0.1 % of the whole machine. The daemon idles at zero, the CLI does
+not import NumPy unless you start music mode, and NumPy's thread pool is capped
+to one thread. The only thing that polls is the bar widget: every 4 s it runs a
+one-line shell command to see whether music mode is running (so a start or stop
+from the menu or the CLI shows on the icon), and it asks the daemon for the
+lights' power only while its popup is open.
+
+## What the widget shows
+
+- **The bulb** dims when the lights are off, and three music notes come off it
+  (pulsing, in place of the rays) while music mode is on. Both come from real
+  state, not from the last click: music from the
+  music process itself, power from the daemon's last-commanded state
+  (`omaelk status` prints `connected on` / `connected off` / `connected unknown`).
+  The controller can't be asked whether it is on, so after the daemon restarts
+  the power is `unknown` and the icon is left as it is until the next command.
+- Music is re-checked every few seconds, wherever it was started from. Power is
+  only re-checked while the popup is open, so a power change made from the CLI
+  or the menu shows up the next time you open it. A command that has to
+  reconnect first (up to ~20 s) is waited for rather than assumed.
+- **Known limitations:** the highlighted colour or effect is the last one picked
+  in the popup, and the brightness and speed sliders only send values. They stay
+  where you leave them while the shell runs, but start at 100 and 50 after a
+  restart: the controller doesn't report them, so they are not read back.
 
 ## Compatibility
 
@@ -258,6 +301,11 @@ the output of `omaelk setup`.
 
 - **"controller not found"** — is the USB power plugged in and the controller
   nearby? Close the phone app (a connected controller stops advertising).
+- **Several Bluetooth adapters** — make sure the one in range of the controller
+  is the one BlueZ is using: `bluetoothctl list`, then `bluetoothctl select <address>`.
+- **The first command takes 10–20 s** — the daemon has to find and connect to the
+  controller after it (re)starts; opening the popup starts that connecting.
+  Once it is connected, commands take ~50 ms.
 - **Stuck connection** — `bluetoothctl disconnect <address>`, then retry. The
   daemon also does this on its own after a failed scan.
 - **Restart the daemon** — `omaelk stop-daemon` (the next command starts it again).
@@ -265,18 +313,25 @@ the output of `omaelk setup`.
   on the *default* output. `pactl get-default-sink` shows which.
 - **Widget missing or blank** — `omarchy plugin list` should show
   `paulorivera27.omaelk` as `enabled`. QML errors land in the shell log:
-  `qs log -t 80`.
+  `qs -p /usr/share/omarchy/shell log -t 80` (a QML change needs
+  `omarchy restart shell` to take effect).
 
 ## Development and publishing
 
 ```
 manifest.json  BarWidget.qml  Panel.qml  PixelButton.qml   Omarchy plugin (QML)
+CHANGELOG.md                                               release notes
 assets/icon.svg                                            pixel-art icon
+assets/screenshots/                                        README images
 omaelk                                                     wrapper (venv bootstrap)
 backend/       elk.py  daemon.py  client.py  cli.py  music.py
 scripts/       theme-sync.sh  pick-color.sh  eyedropper.sh  music-toggle.sh
 tests/         test_protocol.py
 ```
+
+Omarchy turns Quickshell's own reloading off, so a change to a `.qml` file only
+shows up after `omarchy restart shell`. A change to the Python backend is picked
+up the next time the daemon starts (`omaelk stop-daemon`).
 
 ```bash
 python3 -m unittest discover -s tests -v   # protocol + packaging checks
@@ -298,7 +353,7 @@ from your git URL.
 omarchy plugin validate .
 gh repo create omaelk --public --source . --push     # first time
 gh repo edit --add-topic omarchy --add-topic omarchy-plugin --add-topic led
-git tag v0.2.0 && git push --tags                    # bump "version" in manifest.json first
+git tag v0.3.0 && git push --tags                    # bump "version" in manifest.json first
 ```
 
 Users then run `omarchy plugin add https://github.com/<you>/omaelk.git --enable`,
