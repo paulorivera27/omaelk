@@ -9,9 +9,17 @@
   colours, effects, brightness and a <b>music-reactive mode</b>, from a pixel-art bar widget or the shell.
 </p>
 
+<p align="center">
+  <img src="assets/screenshots/bar-widget.png" width="510" alt="The OmaElk bulb at the left of the Omarchy bar's system icons, in the theme's accent colour">
+</p>
+
 These controllers (the little box on a USB-powered RGB strip, advertising as
 `ELK-BLEDOB`) are powered over USB but **controlled over Bluetooth LE**, so they
 never show up in `lsusb`. OmaElk talks to them directly; no phone app needed.
+
+**Any standard Bluetooth LE adapter will do** — the one built into your laptop
+or a cheap USB dongle — as long as it can reach the controller. There is nothing
+adapter-specific to install or configure.
 
 ## Features
 
@@ -93,7 +101,7 @@ rm -rf ~/.local/share/omaelk ~/.config/omaelk
 
 | | |
 |---|---|
-| Linux with BlueZ | Bluetooth LE adapter |
+| Linux with BlueZ and any Bluetooth LE adapter | one that can reach the controller |
 | `python3` + `venv` | everything else is installed for you |
 | `pipewire-pulse` / `pulseaudio-utils` | `parec`, for music mode |
 | `zenity`, `hyprpicker` | optional: colour dialog / eyedropper |
@@ -123,7 +131,7 @@ omaelk mode strobe-red --speed 80
 omaelk speed 40                    # effect speed 0 (slow) .. 100 (fast)
 omaelk music                       # react to what's playing; Ctrl-C to stop
 omaelk music-stop / omaelk music-status
-omaelk status                      # daemon + controller state
+omaelk status                      # link + last-commanded power, e.g. "connected on"
 omaelk scan-modes                  # step through every effect to see them
 omaelk menu-snippet                # entries for the Omarchy launcher menu
 ```
@@ -244,7 +252,24 @@ bass-and-sweep track:
 That is about 0.1 % of the whole machine. Nothing polls in the background: the
 daemon idles at zero, the CLI does not import NumPy unless you start music mode,
 NumPy's thread pool is capped to one thread, and the bar widget only checks
-whether music is running while its popup is open or music mode is on.
+whether music is running while its popup is open or music mode is on, and asks
+the daemon for the lights' power only while the popup is open.
+
+## What the widget shows
+
+- **The bulb** dims when the lights are off, and its rays blink while music mode
+  is on. Both come from real state, not from the last click: music from the
+  music process itself, power from the daemon's last-commanded state
+  (`omaelk status` prints `connected on` / `connected off` / `connected unknown`).
+  The controller can't be asked whether it is on, so after the daemon restarts
+  the power is `unknown` and the icon is left as it is until the next command.
+- The bar only re-checks power while the popup is open, so a change made from the
+  CLI or the menu shows up the next time you open it. A command that has to
+  reconnect first (up to ~20 s) is waited for rather than assumed.
+- **Known limitations:** the highlighted colour or effect is the last one picked
+  in the popup, and the brightness and speed sliders only send values (they start
+  at 100 and 50 each time). The controller doesn't report them, so they are not
+  read back.
 
 ## Compatibility
 
@@ -258,6 +283,8 @@ the output of `omaelk setup`.
 
 - **"controller not found"** — is the USB power plugged in and the controller
   nearby? Close the phone app (a connected controller stops advertising).
+- **Several Bluetooth adapters** — make sure the one in range of the controller
+  is the one BlueZ is using: `bluetoothctl list`, then `bluetoothctl select <address>`.
 - **Stuck connection** — `bluetoothctl disconnect <address>`, then retry. The
   daemon also does this on its own after a failed scan.
 - **Restart the daemon** — `omaelk stop-daemon` (the next command starts it again).
@@ -298,7 +325,7 @@ from your git URL.
 omarchy plugin validate .
 gh repo create omaelk --public --source . --push     # first time
 gh repo edit --add-topic omarchy --add-topic omarchy-plugin --add-topic led
-git tag v0.2.0 && git push --tags                    # bump "version" in manifest.json first
+git tag v0.3.0 && git push --tags                    # bump "version" in manifest.json first
 ```
 
 Users then run `omarchy plugin add https://github.com/<you>/omaelk.git --enable`,

@@ -13,6 +13,8 @@ Socket: $XDG_RUNTIME_DIR/omaelk.sock (newline-delimited text, one reply line
 per command: "ok", "ok <detail>" or "err <reason>").
 Commands: ping | status | on | off | color RRGGBB | bright N |
           mode ID [SPEED] | speed N | quit
+`status` replies "ok connected|disconnected on|off|unknown": the link state, then
+the power the lights were last commanded to (the controller can't be asked).
 A client may stream many command lines on one connection (music mode).
 """
 
@@ -27,7 +29,7 @@ from bleak import BleakClient, BleakScanner
 import elk
 
 SCAN_TIMEOUT = 6.0
-CONNECT_TIMEOUT = 10.0
+CONNECT_TIMEOUT = 25.0
 RETRY_BACKOFF = 5.0     # after a failed connect, fail fast for this long
 
 
@@ -37,6 +39,10 @@ class Controller:
         self.client = None
         self.lock = asyncio.Lock()
         self.retry_after = 0.0
+        # Last commanded power: None until the first command. The controller has
+        # no readable power state, so this is the only truth there is; it
+        # survives a dropped link because the command still describes intent.
+        self.power = None
 
     @property
     def connected(self):
@@ -129,17 +135,24 @@ async def dispatch(ctl, parts):
     if c == "ping":
         return "ok"
     if c == "status":
-        return "ok connected" if ctl.connected else "ok disconnected"
+        link = "connected" if ctl.connected else "disconnected"
+        power = "unknown" if ctl.power is None else ("on" if ctl.power else "off")
+        return f"ok {link} {power}"
+    # Power is recorded only after the write succeeded, so a failed command
+    # never changes what status reports. Colour and mode light the strip, so
+    # they imply "on"; brightness and speed only set a parameter and leave an
+    # "off" strip dark, so they say nothing about power.
     if c == "on":
-        await ctl.write(elk.cmd_power(True)); return "ok"
+        await ctl.write(elk.cmd_power(True)); ctl.power = True; return "ok"
     if c == "off":
-        await ctl.write(elk.cmd_power(False)); return "ok"
+        await ctl.write(elk.cmd_power(False)); ctl.power = False; return "ok"
     if c == "color":
-        await ctl.write(elk.cmd_color(*_hex(parts[1]))); return "ok"
+        await ctl.write(elk.cmd_color(*_hex(parts[1]))); ctl.power = True; return "ok"
     if c == "bright":
         await ctl.write(elk.cmd_brightness(int(parts[1]))); return "ok"
     if c == "mode":
         await ctl.write(elk.cmd_mode(int(parts[1], 0)))
+        ctl.power = True
         if len(parts) > 2:
             await ctl.write(elk.cmd_speed(int(parts[2])))
         return "ok"

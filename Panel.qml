@@ -29,8 +29,21 @@ Panel {
 
   property bool lit: hostWidget ? hostWidget.lit : true
   property bool musicOn: false
+  // Last colour / effect picked *in this popup*. Not read back from the lights
+  // (only power and music have a source of truth), so one set from the menu or
+  // CLI isn't highlighted; the sliders likewise only send, they don't report.
   property string activeColor: ""
   property string activeEffect: ""
+
+  // Music start/stop in flight: the state we are waiting for the pidfile to
+  // show, and how many polls are left before giving up and showing the truth.
+  property bool musicTarget: false
+  property int settleTicks: 0
+
+  // Same for power: the state we expect the daemon to report once the command
+  // we just sent has gone through (a cold Bluetooth connect can take a while).
+  property bool powerTarget: true
+  property int powerTicks: 0
 
   readonly property var swatches: [
     { name: "Warm white", hex: "ffb060" }, { name: "Red", hex: "ff0000" },
@@ -60,58 +73,156 @@ Panel {
 
   function run(args) { Quickshell.execDetached([root.led].concat(args)) }
 
+  // Power and music both show optimistically for instant feedback and are then
+  // corrected by a probe (see below), so the icon can't stay wrong.
   function setPower(on) {
     run([on ? "on" : "off"])
-    if (hostWidget) hostWidget.lit = on
+    if (!on) musicStopping()      // `omaelk off` ends the visualiser too
+    setLit(on)
   }
 
   function setColor(hex) {
     activeColor = hex
     activeEffect = ""
-    musicOn = false          // a manual colour takes over from the visualiser
+    musicStopping()               // a manual colour takes over from the visualiser
     run(["color", hex])
-    if (hostWidget) hostWidget.lit = true
+    setLit(true)
   }
 
   function setEffect(name) {
     activeEffect = name
     activeColor = ""
-    musicOn = false
+    musicStopping()
     run(["mode", name])
-    if (hostWidget) hostWidget.lit = true
+    setLit(true)
   }
 
+  // The CLI stops music on colour/mode/off. Show that now, then let the probe
+  // confirm once the process has actually gone.
+  function musicStopping() {
+    if (!musicOn) return
+    musicOn = false
+    startSettle(false)
+  }
+
+  function setLit(on) {
+    applyLit(on)
+    powerTarget = on
+    powerTicks = 30               // x 1.5 s: gives up after 45 s and shows the truth
+    powerSettle.restart()
+  }
+
+  function applyLit(on) {
+    if (!hostWidget) return
+    hostWidget.lit = on
+    hostWidget.litKnown = true
+  }
+
+  // The toggle script starts music detached, and the pidfile only appears once
+  // the CLI has spawned (and, on first run, built its virtualenv), so a click
+  // can't know the outcome. Don't guess: leave the icon alone, run the toggle,
+  // and poll the pidfile until it shows the state we asked for.
   function toggleMusic() {
-    musicOn = !musicOn
+    if (settle.running) return    // the toggle script flips whatever is there now;
+                                  // the button reads "Starting…"/"Stopping…" meanwhile
     Quickshell.execDetached([root.scripts + "/music-toggle.sh"])
-    recheck.restart()
+    startSettle(!musicOn)
   }
 
-  function refresh() { statusProc.running = true }
+  function startSettle(target) {
+    musicTarget = target
+    settleTicks = 20              // x 400 ms: gives up after 8 s and shows the truth
+    settle.restart()
+  }
+
+  function refreshMusic() { statusProc.running = true }
+  function refreshPower() { powerProc.running = true }
+  function refresh() { refreshMusic(); refreshPower() }
 
   // Music runs as its own process (menu, CLI or this panel can start it), so
-  // ask the system rather than trusting our last click. A kill -0 on the
-  // pidfile's PID is far cheaper than starting the CLI.
+  // ask the system rather than trusting our last click. This is the only thing
+  // that sets musicOn from reality. Same check as the CLI's music_pid() (the
+  // PID is alive and is `.../backend/cli.py music`, not a recycled PID), but
+  // without starting Python.
   Process {
     id: statusProc
     command: ["sh", "-c",
-      "kill -0 \"$(cat \"${XDG_RUNTIME_DIR:-/tmp}/omaelk-music.pid\" 2>/dev/null)\" 2>/dev/null"]
-    onExited: function(exitCode) { root.musicOn = exitCode === 0 }
+      "pid=$(cat \"${XDG_RUNTIME_DIR:-/tmp}/omaelk-music.pid\" 2>/dev/null) && " +
+      "tr '\\0' ' ' < \"/proc/$pid/cmdline\" 2>/dev/null | grep -q '/backend/cli.py music'"]
+    onExited: function(exitCode) {
+      var alive = exitCode === 0
+      // We just asked for it to stop and it hasn't exited yet: don't flash back
+      // to "playing" or wipe the colour that was just picked. If it never goes
+      // away, the settle timeout lets the truth through.
+      if (alive && settle.running && !root.musicTarget) return
+      root.musicOn = alive
+      if (alive) {
+        // The visualiser owns the colour now, so a highlighted swatch or
+        // effect would be a lie, and the lights are evidently on.
+        root.activeColor = ""
+        root.activeEffect = ""
+        root.applyLit(true)
+      }
+      if (settle.running && alive === root.musicTarget) settle.stop()
+    }
   }
 
+  // The lights' power can't be read from the controller, so the daemon keeps
+  // the last commanded state ("connected on"). "unknown" (fresh daemon) and a
+  // missing daemon leave the icon as it is rather than guessing "off".
+  Process {
+    id: powerProc
+    command: [root.led, "status"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var power = text.trim().split(/\s+/)[1]
+        if (power !== "on" && power !== "off") return
+        var on = power === "on"
+        if (powerSettle.running) {
+          // A command is still in flight: the daemon only reports it once the
+          // write succeeds, so the old value isn't news. Wait for ours.
+          if (on !== root.powerTarget) return
+          powerSettle.stop()
+        }
+        root.applyLit(on)
+      }
+    }
+  }
+
+  // Bounded wait for the daemon to report the power we just commanded.
   Timer {
-    id: recheck
-    interval: 1800
-    onTriggered: root.refresh()
+    id: powerSettle
+    interval: 1500
+    repeat: true
+    onTriggered: {
+      if (--root.powerTicks <= 0) stop()
+      root.refreshPower()       // after the last tick this is plain truth
+    }
+  }
+
+  // Bounded convergence after a music toggle.
+  Timer {
+    id: settle
+    interval: 400
+    repeat: true
+    onTriggered: {
+      if (--root.settleTicks <= 0) stop()
+      root.refreshMusic()
+    }
   }
 
   // Poll only while it can matter: the popup is open, or music is on (to notice
-  // it being stopped from the CLI or the menu). Otherwise nothing runs.
+  // it being stopped from the CLI or the menu). Otherwise nothing runs. Power is
+  // only probed with the popup open (music implies on, and the probe starts the
+  // CLI); the music check is a one-line shell command.
   Timer {
     interval: 4000
     repeat: true
     running: root.opened || root.musicOn
-    onTriggered: root.refresh()
+    onTriggered: {
+      root.refreshMusic()
+      if (root.opened) root.refreshPower()
+    }
   }
 
   onOpenedChanged: if (opened) refresh()
@@ -229,7 +340,8 @@ Panel {
           PanelSectionHeader { text: "MUSIC" }
 
           PixelButton {
-            text: root.musicOn ? "♪ Reacting to audio — click to stop" : "♪ React to what's playing"
+            text: settle.running ? (root.musicTarget ? "♪ Starting…" : "♪ Stopping…")
+                  : root.musicOn ? "♪ Reacting to audio — click to stop" : "♪ React to what's playing"
             active: root.musicOn
             onClicked: root.toggleMusic()
           }
