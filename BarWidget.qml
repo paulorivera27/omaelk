@@ -13,9 +13,13 @@ BarWidget {
   id: root
   moduleName: "paulorivera27.omaelk"
 
-  // Whether the lights are believed to be on. The popup flips this when you
-  // press ON/OFF; the icon dims when they are off.
+  // Whether the lights are on. The popup sets it when you press ON/OFF and then
+  // corrects it from the daemon's last-commanded power, so changes made from the
+  // menu or CLI show up too. The icon dims when they are off.
   property bool lit: true
+  // False until a command or a probe has told us; until then "lit" is only a
+  // default, so the tooltip doesn't claim it.
+  property bool litKnown: false
   readonly property bool musicOn: panelLoader.item ? panelLoader.item.musicOn === true : false
 
   // ---- Popup shape contract for shell.summon/hide/toggle routing:
@@ -76,7 +80,9 @@ BarWidget {
     bar: root.bar
     labelVisible: false
     hasVisualContent: true
-    tooltipText: root.musicOn ? "OmaElk — music mode" : "OmaElk LED lights"
+    tooltipText: root.musicOn ? "OmaElk — music mode"
+                 : !root.litKnown ? "OmaElk LED lights"
+                 : root.lit ? "OmaElk — lights on" : "OmaElk — lights off"
     fixedWidth: root.vertical ? -1 : icon.width + Style.space(16)
     dimmed: !root.lit
 

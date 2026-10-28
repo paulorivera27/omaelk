@@ -15,7 +15,9 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 _VENV_PY = os.path.join(elk.VENV, "bin", "python")
 PY = _VENV_PY if os.path.exists(_VENV_PY) else sys.executable
 
-REPLY_TIMEOUT = 30.0    # covers a cold connect inside the daemon
+# Covers a cold connect inside the daemon: scan + stale-link release + rescan +
+# connect is ~40 s at worst (see daemon.py), and a dropped link retries once.
+REPLY_TIMEOUT = 90.0
 
 
 async def _ping():
@@ -85,6 +87,19 @@ async def send(line, addr=None):
         w.write((line.strip() + "\n").encode())
         await w.drain()
         reply = await asyncio.wait_for(r.readline(), REPLY_TIMEOUT)
+    finally:
+        w.close()
+    return reply.decode().strip()
+
+
+async def query(line, timeout=5.0):
+    """Ask a daemon that is *already running* and return its reply. Unlike
+    send() this never starts one, and raises OSError if nothing is listening."""
+    r, w = await asyncio.open_unix_connection(elk.SOCK)
+    try:
+        w.write((line.strip() + "\n").encode())
+        await w.drain()
+        reply = await asyncio.wait_for(r.readline(), timeout)
     finally:
         w.close()
     return reply.decode().strip()

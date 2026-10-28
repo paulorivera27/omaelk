@@ -9,8 +9,10 @@ real protocol fails here before it reaches a controller.
 
 import json
 import os
+import asyncio
 import re
 import sys
+import types
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -18,6 +20,18 @@ sys.path.insert(0, os.path.join(ROOT, "backend"))
 
 import elk  # noqa: E402
 import cli  # noqa: E402
+
+# The daemon imports bleak at module level; dispatch() never touches it, so a
+# stub lets these tests run without the virtualenv. It is only in place for the
+# import.
+_stub = "bleak" not in sys.modules
+if _stub:
+    sys.modules["bleak"] = types.SimpleNamespace(BleakClient=None, BleakScanner=None)
+try:
+    import daemon  # noqa: E402
+finally:
+    if _stub:
+        del sys.modules["bleak"]
 
 
 def h(s):
@@ -83,6 +97,63 @@ class Menu(unittest.TestCase):
         for key, row in self.rows().items():
             if "action" in row:
                 self.assertTrue(row["action"].startswith(ROOT + os.sep), key)
+
+
+class FakeController(daemon.Controller):
+    """A Controller whose writes are recorded instead of sent over BLE."""
+
+    def __init__(self, fail=False):
+        super().__init__(None)
+        self.sent, self.fail = [], fail
+
+    async def write(self, data):
+        if self.fail:
+            raise RuntimeError("controller not found")
+        self.sent.append(data)
+
+
+class PowerState(unittest.TestCase):
+    def ask(self, ctl, line):
+        return asyncio.run(daemon.dispatch(ctl, line.split()))
+
+    def test_unknown_until_the_first_command(self):
+        self.assertEqual(self.ask(FakeController(), "status"), "ok disconnected unknown")
+
+    def test_on_and_off(self):
+        ctl = FakeController()
+        self.ask(ctl, "off")
+        self.assertEqual(self.ask(ctl, "status"), "ok disconnected off")
+        self.ask(ctl, "on")
+        self.assertEqual(self.ask(ctl, "status"), "ok disconnected on")
+
+    def test_colour_and_mode_mean_on(self):
+        for line in ("color ff0000", "mode 135", "mode 135 40"):
+            ctl = FakeController()
+            self.ask(ctl, "off")
+            self.ask(ctl, line)
+            self.assertEqual(self.ask(ctl, "status"), "ok disconnected on", line)
+
+    def test_brightness_and_speed_say_nothing_about_power(self):
+        for line in ("speed 50", "bright 80"):
+            ctl = FakeController()
+            self.ask(ctl, "off")
+            self.ask(ctl, line)
+            self.assertEqual(self.ask(ctl, "status"), "ok disconnected off", line)
+            fresh = FakeController()
+            self.ask(fresh, line)
+            self.assertEqual(self.ask(fresh, "status"), "ok disconnected unknown", line)
+
+    def test_failed_write_leaves_power_alone(self):
+        ctl = FakeController(fail=True)
+        ctl.power = True
+        with self.assertRaises(RuntimeError):   # handle() turns this into "err ..."
+            self.ask(ctl, "off")
+        self.assertEqual(self.ask(ctl, "status"), "ok disconnected on")
+
+    def test_status_and_ping_do_not_write(self):
+        ctl = FakeController()
+        self.ask(ctl, "status"); self.ask(ctl, "ping")
+        self.assertEqual(ctl.sent, [])
 
 
 class Packaging(unittest.TestCase):

@@ -13,7 +13,8 @@ holds one BLE connection, so changes are instant and never collide.
   omaelk speed 0-100
   omaelk music [--source NAME] [-v]     audio-reactive (Ctrl-C or music-stop)
   omaelk music-stop | music-status
-  omaelk status                   daemon / controller state
+  omaelk status                   link and power, e.g. "connected on"; never
+                                  starts the daemon (exit 1 if it isn't running)
   omaelk scan-modes               step through the effect ids
   omaelk menu-snippet             print the omarchy menu entries (JSONC)
   omaelk daemon | stop-daemon
@@ -24,6 +25,7 @@ import asyncio
 import os
 import signal
 import sys
+import time
 
 import elk
 import client
@@ -56,6 +58,11 @@ def stop_music():
             os.kill(pid, signal.SIGTERM)
         except OSError:
             return False
+        # Wait for it to really exit: a frame it streams after we return would
+        # overwrite the colour or "off" the caller is about to send.
+        deadline = time.monotonic() + 2.0
+        while music_pid() and time.monotonic() < deadline:
+            time.sleep(0.05)
         return True
     return False
 
@@ -228,9 +235,11 @@ async def main():
         await client.wait_stopped()      # until it has really let go
         return 0
     if cmd == "status":
+        # A query, not a command: starting the daemon here would kick off a BLE
+        # scan every time the bar widget probes for the lights' state.
         try:
-            print((await client.send("status", addr))[3:] or "ok")
-        except (OSError, RuntimeError):
+            print((await client.query("status"))[3:] or "ok")
+        except (OSError, RuntimeError, asyncio.TimeoutError):
             print("daemon not running"); return 1
         return 0
 
