@@ -20,6 +20,11 @@
   on release).
 - Opening the popup starts the daemon connecting, so the first click doesn't
   wait for a cold Bluetooth connect.
+- In music mode three pixel-art music notes come off the bulb (they replace the
+  rays and pulse), instead of the rays blinking.
+- The bar checks every 4 s whether music mode is running (a one-line shell
+  command), so starting or stopping it from the menu or the CLI shows on the icon
+  even with the popup closed.
 - Tooltip shows lights on/off once known.
 - README: any Bluetooth LE adapter that can reach the controller works; notes on
   multiple adapters, what the widget shows and its known limitations; popup,

@@ -217,14 +217,14 @@ Panel {
     }
   }
 
-  // Poll only while it can matter: the popup is open, or music is on (to notice
-  // it being stopped from the CLI or the menu). Otherwise nothing runs. Power is
-  // only probed with the popup open (music implies on, and the probe starts the
-  // CLI); the music check is a one-line shell command.
+  // Music can be started or stopped from the menu or the CLI at any time, so
+  // the icon checks every few seconds; that is a one-line shell command, a few
+  // milliseconds. Power is asked of the daemon (a Python start) only while the
+  // popup is open, and music implies on.
   Timer {
     interval: 4000
     repeat: true
-    running: root.opened || root.musicOn
+    running: true
     onTriggered: {
       root.refreshMusic()
       if (root.opened) root.refreshPower()
