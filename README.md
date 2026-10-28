@@ -37,6 +37,16 @@ adapter-specific to install or configure.
   are instant. See [Performance](#performance).
 - **`omaelk` CLI** — scriptable, with a menu generator for the Omarchy launcher.
 
+<table>
+  <tr>
+    <td align="center"><img src="assets/screenshots/popup.png" width="300" alt="The OmaElk popup: colour swatches, pickers, music button, jump/fade/strobe effects and brightness and speed sliders"><br><sub>The popup</sub></td>
+    <td align="center"><img src="assets/screenshots/popup-music.png" width="300" alt="The popup with music mode on: the music button is highlighted and reads Reacting to audio"><br><sub>Music mode on</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="assets/screenshots/bar-widget-music.png" width="510" alt="The bulb in the bar with its rays shown; in music mode they blink"><br><sub>In music mode the bulb's rays blink</sub></td>
+  </tr>
+</table>
+
 ## Install (Omarchy plugin)
 
 > Omarchy plugins run as ordinary, **unsandboxed** code inside your shell. Read
@@ -267,9 +277,9 @@ the daemon for the lights' power only while the popup is open.
   CLI or the menu shows up the next time you open it. A command that has to
   reconnect first (up to ~20 s) is waited for rather than assumed.
 - **Known limitations:** the highlighted colour or effect is the last one picked
-  in the popup, and the brightness and speed sliders only send values (they start
-  at 100 and 50 each time). The controller doesn't report them, so they are not
-  read back.
+  in the popup, and the brightness and speed sliders only send values. They stay
+  where you leave them while the shell runs, but start at 100 and 50 after a
+  restart: the controller doesn't report them, so they are not read back.
 
 ## Compatibility
 
@@ -299,11 +309,16 @@ the output of `omaelk setup`.
 ```
 manifest.json  BarWidget.qml  Panel.qml  PixelButton.qml   Omarchy plugin (QML)
 assets/icon.svg                                            pixel-art icon
+assets/screenshots/                                        README images
 omaelk                                                     wrapper (venv bootstrap)
 backend/       elk.py  daemon.py  client.py  cli.py  music.py
 scripts/       theme-sync.sh  pick-color.sh  eyedropper.sh  music-toggle.sh
 tests/         test_protocol.py
 ```
+
+Omarchy turns Quickshell's own reloading off, so a change to a `.qml` file only
+shows up after `omarchy restart shell`. A change to the Python backend is picked
+up the next time the daemon starts (`omaelk stop-daemon`).
 
 ```bash
 python3 -m unittest discover -s tests -v   # protocol + packaging checks
