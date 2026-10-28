@@ -16,7 +16,11 @@
 - **Slow connects:** the daemon waits up to 25 s for the controller to connect
   (was 10 s), and clients wait up to 90 s for a reply. Controllers that took
   ~12 s to connect made every command time out.
+- Brightness and speed sliders stay where you set them (they used to snap back
+  on release).
+- Opening the popup starts the daemon connecting, so the first click doesn't
+  wait for a cold Bluetooth connect.
 - Tooltip shows lights on/off once known.
 - README: any Bluetooth LE adapter that can reach the controller works; notes on
-  multiple adapters, what the widget shows and its known limitations; bar
-  screenshot.
+  multiple adapters, what the widget shows and its known limitations; popup,
+  music-mode and bar screenshots.

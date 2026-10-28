@@ -35,6 +35,12 @@ Panel {
   property string activeColor: ""
   property string activeEffect: ""
 
+  // Slider positions. PanelSlider snaps back to its `value` binding on release,
+  // so they must be stored here or they would jump back every time. They live
+  // as long as the shell does and start at the controller's defaults.
+  property int brightness: 100
+  property int effectSpeed: 50
+
   // Music start/stop in flight: the state we are waiting for the pidfile to
   // show, and how many polls are left before giving up and showing the truth.
   property bool musicTarget: false
@@ -225,7 +231,10 @@ Panel {
     }
   }
 
-  onOpenedChanged: if (opened) refresh()
+  // Opening the popup is the cue that a command is coming: have the daemon
+  // connect now (a cold Bluetooth connect can take ~10 s) rather than on the
+  // first click. A no-op if it is already running.
+  onOpenedChanged: if (opened) { run(["daemon"]); refresh() }
   Component.onCompleted: refresh()
 
   KeyboardPanel {
@@ -388,8 +397,11 @@ Panel {
             maximum: 100
             step: 5
             integer: true
-            value: 100
-            onReleased: function(v) { root.run(["bright", String(Math.round(v))]) }
+            value: root.brightness
+            onReleased: function(v) {
+              root.brightness = Math.round(v)
+              root.run(["bright", String(root.brightness)])
+            }
           }
 
           PanelSectionHeader { text: "EFFECT SPEED" }
@@ -401,8 +413,11 @@ Panel {
             maximum: 100
             step: 5
             integer: true
-            value: 50
-            onReleased: function(v) { root.run(["speed", String(Math.round(v))]) }
+            value: root.effectSpeed
+            onReleased: function(v) {
+              root.effectSpeed = Math.round(v)
+              root.run(["speed", String(root.effectSpeed)])
+            }
           }
         }
       }
